@@ -1,0 +1,11 @@
+#include <RcppArmadillo.h>
+
+// [[Rcpp::export]]
+void update_1(arma::mat &x) {
+  x /= 2;
+}
+
+// [[Rcpp::export]]
+void update_2(int &y) {
+  y *= 2;
+}

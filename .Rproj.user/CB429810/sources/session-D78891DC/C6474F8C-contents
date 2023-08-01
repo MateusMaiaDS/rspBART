@@ -1,0 +1,16 @@
+sourceCpp(code = "
+#include <Rcpp.h>
+// [[Rcpp::export]]
+void update_3(Rcpp::NumericMatrix &x, int& y) {
+  x = x + 1;
+  //Rcpp::Rcout << x ;
+  y *= 2;
+  //return x;
+}
+")
+
+xx <- matrix(c(0,0))
+yy <- 1L
+update_3(x = xx, y = yy)
+xx
+yy
