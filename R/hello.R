@@ -108,7 +108,7 @@ rspBART <- function(x_train,
   dx <- 1/ndx
   # New_knots
   new_knots <- matrix()
-  new_knots <- matrix(mapply(min_x,max_x, FUN = function(MIN,MAX){seq(from = 0-3*dx, to = 1+3*dx, by = dx)}), ncol = length(dummy_x$continuousVars)) # MIN and MAX are 0 and 1 respectively, because of the scale
+  new_knots <- matrix(mapply(x_min,x_max, FUN = function(MIN,MAX){seq(from = 0-3*dx, to = 1+3*dx, by = dx)}), ncol = length(dummy_x$continuousVars)) # MIN and MAX are 0 and 1 respectively, because of the scale
   colnames(new_knots) <- dummy_x$continuousVars
 
   # Creating the natural B-spline for each predictor
@@ -131,6 +131,11 @@ rspBART <- function(x_train,
   } else {
     D <- diag(nrow = ncol(B_train_arr[,,1]))
   }
+
+  # Calculating the penalty matrix
+  P <- crossprod(D)
+  P[1,1] <- P[1,1] + 1e-8
+  P[nrow(P),ncol(P)] <- P[nrow(P),ncol(P)] + 1e-8
 
   # Scaling the y
   min_y <- min(y_train)
@@ -179,7 +184,14 @@ rspBART <- function(x_train,
   n_post <- (n_mcmc-n_burn)
   all_trees <- vector("list", n_mcmc)
   all_betas <- vector("list",n_mcmc)
+  tau_beta_vec <- rep(1,n_tree)
   all_tau_beta <- matrix(NA,nrow = n_mcmc,ncol = n_tree)
+  all_tau <- numeric(n_mcmc)
+  trees_fit <- matrix(0,nrow = n_tree,ncol = nrow(x_train_scale))
+  all_trees_fit <- vector("list",n_mcmc)
+  all_trees <- vector("list",n_mcmc)
+  forest <- vector("list",n_tree)
+
   proposal_outcomes <- setNames(data.frame(matrix(nrow = 0, ncol =6)),
                                 c("tree_number" , "proposal", "status","mcmc_iter", "new_tree_loglike", "old_tree_loglike"))
   all_train_indexes <- data.frame(matrix(data = NA,nrow = nrow(xcut_m),ncol = ncol(xcut_m)))
@@ -221,10 +233,45 @@ rspBART <- function(x_train,
 
   }
 
-  # So to simply interepret the element all_var_splits
+  #   So to simply interepret the element all_var_splits each element correspond
+  #to each variable. Afterwards each element corresponds to a cutpoint; Finally,
+  #inside that level we would have the index for the the left and right nodes;
+
+  # Initialsing the loop
+  for(i in 1:n_mcmc){
+
+
+    # Initialising all the stumps
+    for(i in 1:n_tree){
+      forest[[i]] <- stump(x_train = x_train_scale,
+                           x_test = x_test_scale,
+                           B_train_arr = B_train_arr,
+                           B_test_arr = B_test_arr)
+    }
+
+
+    for(t in 1:n_tree){
+
+
+        # Calculating the partial residuals
+        if(n_tree>1){
+          partial_residuals <- y_scale-colSums(trees_fit[-j,,drop = FALSE])
+        } else {
+          partial_residuals <- y_scale
+        }
+
+
+      # Sample a verb
+      verb <- sample(c("grow","prune", "change"), prob = c(0.3,0.3,0.4))
+
+
+
+
+
+    }
+  }
 
 }
-
 
 
 
