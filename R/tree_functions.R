@@ -41,7 +41,22 @@ get_terminals <- function(tree){
 get_nogs <- function(tree){
 
   # Return the name of the termianl nodes
-  return(names(tree)[!unlist(lapply(tree, function(x){x$terminal}),use.names =  TRUE)])
+  non_terminal <- names(tree)[!unlist(lapply(tree, function(x){x$terminal}),use.names =  TRUE)]
+
+  # In case there are non nonterminal nondes
+  if(length(non_terminal)==0){
+    return(non_terminal)
+  }
+
+  bool_nog <- vector("logical",length = length(non_terminal))
+  for(i in 1:length(bool_nog)){
+    # Checking if both children are terminal
+    if( tree[[tree[[non_terminal[i]]]$left]]$terminal & tree[[tree[[non_terminal[i]]]$right]]$terminal) {
+      bool_nog[i] <- TRUE
+    }
+  }
+
+  return(  non_terminal[bool_nog])
 }
 
 # Getting the maximum node index number
@@ -74,8 +89,8 @@ nodeLogLike <- function(curr_part_res,
 
 # Grow a tree
 grow <- function(tree,
-                 x_train,
-                 curr_part_res){
+                 curr_part_res,
+                 data){
 
   # Getting the maximum index number
   max_index <- get_max_node(tree)
@@ -88,54 +103,79 @@ grow <- function(tree,
   g_node_name <- sample(terminal_nodes,size = 1)
   g_node <- tree[[g_node_name]]
 
-  # Sample a split var
-  p_var <- sample(1:ncol(tree[[1]]$B_train_arr),size = 1)
 
-  # Selecting an available cutpoint from this terminal node
-  valid_range_grow <- range(x_train[g_node$train_index,p_var])
+  valid_terminal_node <- TRUE
+  valid_count <- 0
+  while(valid_terminal_node){
+      # Convinience while to avoid terminal nodes of 2
+      # Sample a split var
+      p_var <- sample(1:ncol(data$B_train_arr),size = 1)
 
-  # Getting which cutpoints are valid and sample onde index
-  sample_cutpoint <- sample(which(xcut_m[,p_var]>valid_range_grow[1] & xcut_m[,p_var]<valid_range_grow[2]),
-         size = 1)
+      # Selecting an available cutpoint from this terminal node
+      valid_range_grow <- range(x_train[g_node$train_index,p_var])
 
-  # Getting the left & right index
-  left_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_train[all_var_splits[[p_var]][[sample_cutpoint]]$left_train %in% g_node$train_index]
-  right_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_train[all_var_splits[[p_var]][[sample_cutpoint]]$right_train %in% g_node$train_index]
+      # Getting which cutpoints are valid and sample onde index
+      sample_cutpoint <- sample(which(xcut_m[,p_var]>valid_range_grow[1] & xcut_m[,p_var]<valid_range_grow[2]),
+             size = 1)
 
-  left_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_test[all_var_splits[[p_var]][[sample_cutpoint]]$left_test %in% g_node$test_index]
-  right_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_test[all_var_splits[[p_var]][[sample_cutpoint]]$right_test %in% g_node$test_index]
+      # Getting the left & right index
+      left_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_train[all_var_splits[[p_var]][[sample_cutpoint]]$left_train %in% g_node$train_index]
+      right_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_train[all_var_splits[[p_var]][[sample_cutpoint]]$right_train %in% g_node$train_index]
+
+      left_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_test[all_var_splits[[p_var]][[sample_cutpoint]]$left_test %in% g_node$test_index]
+      right_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_test[all_var_splits[[p_var]][[sample_cutpoint]]$right_test %in% g_node$test_index]
 
 
 
-  # Verifying that the correct number was used
-  if((length(left_index)+length(right_index))!=length(g_node$train_index)){
-    stop("Something went wrong here --- train grown index doest match")
+      # Verifying that the correct number was used
+      if((length(left_index)+length(right_index))!=length(g_node$train_index)){
+        stop("Something went wrong here --- train grown index doest match")
+      }
+
+      if((length(left_test_index)+length(right_test_index))!=length(g_node$test_index)){
+        stop("Something went wrong here --- test grown index doest match")
+      }
+
+      if( (length(left_index) > 1) & (length(right_index)>1)){
+          # Getting out of the while
+          break
+      } else {
+
+          # Adding one to the counter
+          valid_count = valid_count + 1
+
+          # Stop trying to search for a valid cutpoint
+          if(valid_count > 2) {
+            valid_terminal_node = FALSE
+            return(tree)
+          }
+      }
   }
 
-  if((length(left_test_index)+length(right_test_index))!=length(g_node$test_index)){
-    stop("Something went wrong here --- test grown index doest match")
+  # For convinience we are going to avoid terminal nodes less than 2
+  if( (length(left_index)<2) || (length(right_index) < 2)) {
+    stop("Error of invalid terminal node")
   }
-
   # Calculating loglikelihood for the grown node, the left and the right node
 
   g_loglike <- nodeLogLike(curr_part_res = curr_part_res,
-                           B_train_arr = B_train_arr,
+                           B_train_arr = data$B_train_arr,
                            index_node = g_node$train_index,
-                           tau_beta_vec = tau_beta_vec,
-                           P = P)
+                           tau_beta_vec = data$tau_beta_vec,
+                           P = data$P)
 
 
   left_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
-                               B_train_arr = B_train_arr,
+                               B_train_arr = data$B_train_arr,
                                index_node = left_index,
-                               tau_beta_vec = tau_beta_vec,
-                               P = P)
+                               tau_beta_vec = data$tau_beta_vec,
+                               P = data$P)
 
   right_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
-                               B_train_arr = B_train_arr,
+                               B_train_arr = data$B_train_arr,
                                index_node = right_index,
-                               tau_beta_vec = tau_beta_vec,
-                               P = P)
+                               tau_beta_vec = data$tau_beta_vec,
+                               P = data$P)
 
   # Calculating the prior
   prior_loglike <- log(alpha*(1+g_node$depth_node)^(-beta)) + # Prior of the grown node becoming nonterminal
@@ -149,7 +189,7 @@ grow <- function(tree,
   acceptance <- exp(-g_loglike+left_loglike+right_loglike+prior_loglike+log_trasition_prob)
 
   # Getting the training the left and the right index for the the grown node
-  if(stats::runif(n = 1)<acceptance){
+  if(0<acceptance){
     left_node <- list(node_number = max_index+1,
                       isRoot = FALSE,
                       train_index = left_index,
@@ -196,11 +236,87 @@ grow <- function(tree,
 }
 
 
-# Get all the NOGs (it parent of terminal children)
-get_nog <- function(tree){
+# Pruning a tree
+prune <- function(tree,
+                 curr_part_res,
+                 data){
 
-  # Return the name of the termianl nodes
-  return(names(tree)[unlist(lapply(tree, function(x){x$terminal}),use.names =  TRUE)])
+
+  # Getting the maximum index number
+  max_index <- get_max_node(tree)
+
+  # Sampling a terminal node
+  terminal_nodes <- get_terminals(tree)
+  n_t_nodes <- length(terminal_nodes)
+  nog_nodes <- get_nogs(tree)
+  n_nog_nodes <- length(nog_nodes)
+
+  # Just in case to avoid errors
+  if(n_nog_nodes==0){
+    return(tree)
+  }
+
+  # Selecting a node to be pruned
+  p_node_name <- sample(nog_nodes,size = 1)
+  p_node <- tree[[p_node_name]]
+
+  # Getting the indexes from the left and right children from the pruned node
+  children_left_index <- tree[[p_node$left]]$train_index
+  children_right_index <- tree[[p_node$right]]$train_index
+
+  # Calculating loglikelihood for the grown node, the left and the right node
+
+  p_loglike <- nodeLogLike(curr_part_res = curr_part_res,
+                           B_train_arr = data$B_train_arr,
+                           index_node = p_node$train_index,
+                           tau_beta_vec = data$tau_beta_vec,
+                           P = data$P)
+
+
+  p_left_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
+                               B_train_arr = data$B_train_arr,
+                               index_node = children_left_index,
+                               tau_beta_vec = data$tau_beta_vec,
+                               P = data$P)
+
+  p_right_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
+                                B_train_arr = data$B_train_arr,
+                                index_node = children_right_index,
+                                tau_beta_vec = data$tau_beta_vec,
+                                P = data$P)
+
+  # Calculating the prior
+  prior_loglike <- log(1-alpha*(1+p_node$depth_node)^(-beta)) - # Prior of the new terminal node
+    log(alpha*(1+p_node$depth_node)^(-beta)) - # Prior of the grown node becoming nonterminal
+    2*log(1-alpha*(1+p_node$depth_node+1)^(-beta))  # plus the prior of the two following nodes being terminal
+    # minus the probability of the grown node being terminal
+
+  # Transition prob
+  log_trasition_prob  = log(0.3/(n_t_nodes))-log(0.3/n_nog_nodes)
+
+  # Calculating the acceptance probability
+  acceptance <- exp(p_loglike-p_left_loglike-p_right_loglike+prior_loglike+log_trasition_prob)
+
+  # Getting the training the left and the right index for the the grown node
+  if(stats::runif(n = 1)<acceptance){
+
+    # Erasing the terminal nodes
+    tree[[p_node$left]] <- NULL
+    tree[[p_node$right]] <- NULL
+
+    # Modifying back the pruned node
+    tree[[p_node_name]]$left <- NA
+    tree[[p_node_name]]$right <- NA
+    tree[[p_node_name]]$terminal <- TRUE
+
+  } else {
+    # Do nothing
+  }
+
+  # Return the new tree
+  return(tree)
 }
+
+
 
 

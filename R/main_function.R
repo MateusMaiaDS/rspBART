@@ -134,8 +134,8 @@ rspBART <- function(x_train,
 
   # Calculating the penalty matrix
   P <- crossprod(D)
-  P[1,1] <- P[1,1] + 1e-8
-  P[nrow(P),ncol(P)] <- P[nrow(P),ncol(P)] + 1e-8
+  P[1,1] <- P[1,1] + 1e-6
+  P[nrow(P),ncol(P)] <- P[nrow(P),ncol(P)] + 1e-6
 
   # Scaling the y
   min_y <- min(y_train)
@@ -233,6 +233,20 @@ rspBART <- function(x_train,
 
   }
 
+  # Creating the "data" list which contain all elements necessary to run
+  #most of the functions
+  data <- list(x_train = x_train_scale,
+               x_test = x_test_scale,
+               B_train_arr = B_train_arr,
+               B_test_arr = B_test_arr,
+               all_var_splits = all_var_splits,
+               tau_mu = tau_mu,
+               tau = tau,
+               a_tau = a_tau,
+               d_tau = d_tau,
+               tau_beta_vec = tau_beta_vec,
+               P = P)
+
   #   So to simply interepret the element all_var_splits each element correspond
   #to each variable. Afterwards each element corresponds to a cutpoint; Finally,
   #inside that level we would have the index for the the left and right nodes;
@@ -264,7 +278,24 @@ rspBART <- function(x_train,
       # Sample a verb
       verb <- sample(c("grow","prune", "change"), prob = c(0.3,0.3,0.4))
 
+      # Forcing to grow when only have a stump
+      if(length(forest[[t]])==1){
+        verb <- "grow"
+      }
 
+      if(verb == "grow"){
+        forest[[t]] <- grow(tree = forest[[t]],
+                            curr_part_res = partial_residuals,
+                            data = data)
+      } else if (verb == "prune"){
+        forest[[t]] <- prune(tree = forest[[t]],
+                             curr_part_res = partial_residuals,
+                             data = data)
+      } else if (verb == "change"){
+        forest[[t]] <- change(tree = forest[[t]],
+                              curr_part_res = partial_residuals,
+                              data = data)
+      }
 
 
 
