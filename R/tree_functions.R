@@ -445,6 +445,32 @@ change <- function(tree,
 }
 
 
+# ==========================
+# Updating the gamma
+# ==========================
+updateGamma <- function(tree,
+                        curr_part_res,
+                        data)
+
+  # Getting the terminals
+  t_nodes_names <- get_terminals(tree)
+
+  for(i in 1:length(t_nodes_names)){
+
+    c_t <- tree[[t_nodes_names[i]]]
+    # Updating the sum of the residuals
+    r_sum = sum(curr_part_res[tree[[t_nodes_names[i]]]$train_index])
+
+    tree[[t_nodes_names[i]]]$betas_vec <- rnorm(n = 10)
+
+    for(j in 1:dim(data$B_train_arr)[3]){
+      crossprod(tree[[t_nodes_names[i]]$betas_vec,
+                     colSums(data$B_test_arr[,,j])
+    }
+
+
+  }
+
 
 
 

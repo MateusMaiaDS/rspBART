@@ -283,6 +283,8 @@ rspBART <- function(x_train,
         verb <- "grow"
       }
 
+
+      # Sampling a verb
       if(verb == "grow"){
         forest[[t]] <- grow(tree = forest[[t]],
                             curr_part_res = partial_residuals,
@@ -298,6 +300,10 @@ rspBART <- function(x_train,
       }
 
 
+      # Updating the intercept
+      forest[[t]] <- updateGamma(tree = forest[[t]],
+                                 curr_part_res = partial_residuals,
+                                 data = data)
 
     }
   }
