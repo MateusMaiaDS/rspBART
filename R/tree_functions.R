@@ -1,8 +1,5 @@
 # Creating a stump for a tree
-stump <- function(x_train,
-                  x_test,
-                  B_train_arr,
-                  B_test_arr){
+stump <- function(data){
 
   # Creating the base node
   node <- list()
@@ -11,8 +8,8 @@ stump <- function(x_train,
     node_number = 0,
     isRoot = TRUE,
     # Creating a vector with the tranining index
-    train_index = 1:nrow(x_train),
-    test_index = 1:nrow(x_test),
+    train_index = 1:nrow(data$x_train),
+    test_index = 1:nrow(data$x_test),
     depth_node = 0,
     node_var = NA,
     node_cutpoint_index = NA,
@@ -21,8 +18,7 @@ stump <- function(x_train,
     parent_node = NA,
     terminal = TRUE,
     gamma = 0,
-    B_train_arr = B_train_arr,
-    B_test_arr  = B_test_arr
+    betas_vec = matrix(0,nrow = ncol(data$B_train_arr),ncol = data$n_tree)
    )
 
   # Returning the node
@@ -201,7 +197,10 @@ grow <- function(tree,
                       right = NA,
                       parent_node = g_node_name,
                       terminal = TRUE,
-                      gamma = 0)
+                      gamma = 0,
+                      betas_vec = g_node$betas_vec)
+
+    names(tree[[1]])
 
     right_node <- list(node_number = max_index+2,
                       isRoot = FALSE,
@@ -214,7 +213,8 @@ grow <- function(tree,
                       right = NA,
                       parent_node = g_node_name,
                       terminal = TRUE,
-                      gamma = 0)
+                      gamma = 0,
+                      betas_vec = g_node$betas_vec)
 
     # Modifying the current node
     tree[[g_node_name]]$left = paste0("node",max_index+1)
@@ -450,27 +450,91 @@ change <- function(tree,
 # ==========================
 updateGamma <- function(tree,
                         curr_part_res,
-                        data)
+                        data){
 
   # Getting the terminals
   t_nodes_names <- get_terminals(tree)
+  basis_dim <- dim(data$B_train_arr)[3]
+  knots_dim <- ncol(data$B_train_arr)
+
+
+  # Creating each element for each basis
+  basis_sum_list <- vector("list",basis_dim)
+
 
   for(i in 1:length(t_nodes_names)){
 
-    c_t <- tree[[t_nodes_names[i]]]
+    cu_t <- tree[[t_nodes_names[i]]]
+
     # Updating the sum of the residuals
-    r_sum = sum(curr_part_res[tree[[t_nodes_names[i]]]$train_index])
+    r_sum = curr_part_res[cu_t$train_index]
 
-    tree[[t_nodes_names[i]]]$betas_vec <- rnorm(n = 10)
+    basis_sum <- numeric(basis_dim)
 
-    for(j in 1:dim(data$B_train_arr)[3]){
-      crossprod(tree[[t_nodes_names[i]]$betas_vec,
-                     colSums(data$B_test_arr[,,j])
+    for(j in 1:basis_dim){
+      basis_sum[j] <- crossprod(cu_t$betas_vec[,j,drop = FALSE],colSums(data$B_test_arr[cu_t$train_index,,j]))
     }
 
+    s_gamma_inv <- 1/(length(cu_t$train_index)+data$tau_gamma/data$tau)
+
+    # Computing mean and sd from the intercep
+    gamma_mean <- s_gamma_inv*(r_sum+sum(basis_sum))
+    gamma_sd <- sqrt(s_gamma_inv/(data$tau))
+
+    tree[[t_nodes_names[i]]]$gamma = stats::rnorm(n = 1,mean = gamma_mean,sd = gamma_sd)
 
   }
 
+  return(tree)
+}
+
+# ============
+# Update Betas
+# ============
+
+updateBetas <- function(tree,
+                        curr_part_res,
+                        data){
+
+
+  # Getting the terminals
+  t_nodes_names <- get_terminals(tree)
+  basis_dim <- dim(data$B_train_arr)[3]
+  knots_dim <- ncol(data$B_train_arr)
+
+
+  # Creating each element for each basis
+  basis_sum_list <- vector("list",basis_dim)
+
+
+  for(i in 1:length(t_nodes_names)){
+
+    cu_t <- tree[[t_nodes_names[i]]]
+
+    for(j in 1:basis_dim){
+
+      Gamma_beta_tau_chol <-  chol(crossprod(data$B_train_arr[cu_t$train,,j])+data$tau_beta_vec[j]/data$tau*data$P)
+      Gamma_beta_inv <- chol2inv(Gamma_beta_tau_chol)
+
+      sum_aux <- matrix(0,nrow = length(cu_t$train_index),ncol = 1)
+      # Sum j exception
+      for(k in (1:basis_dim)[-j]){
+          sum_aux <- sum_aux + (data$B_train_arr[cu_t$train_index,,k]%*%cu_t$betas_vec[,k,drop = FALSE])
+      }
+
+      # Calculating the mean to be sampled
+      beta_mean <- Gamma_beta_inv%*%crossprod(data$B_train_arr[cu_t$train_index,,j],curr_part_res[cu_t$train_index])-crossprod(data$B_train_arr[cu_t$train_index,,j],(cu_t$gamma+sum_aux))
+
+      # Check this line again if there's any bug on the cholesky decomposition
+      tree[[t_nodes_names[i]]]$betas_vec[,j] <- mvnfast::rmvn(n = 1,mu = beta_mean,sigma = (1/(data$tau))*Gamma_beta_inv,isChol = FALSE)
+
+      # #If we want to use the cholesky decomposition, doesn;t seem any faster though
+      # test1 <- mvnfast::rmvn(n = 100,mu = beta_mean,sigma = sqrt(data$tau)*Gamma_beta_tau_chol,isChol = TRUE),
+    }
+
+  }
+
+}
 
 
 

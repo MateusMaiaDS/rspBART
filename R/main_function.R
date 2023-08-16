@@ -240,7 +240,9 @@ rspBART <- function(x_train,
                B_train_arr = B_train_arr,
                B_test_arr = B_test_arr,
                all_var_splits = all_var_splits,
+               n_tree = n_tree,
                tau_mu = tau_mu,
+               tau_gamma = tau_gamma,
                tau = tau,
                a_tau = a_tau,
                d_tau = d_tau,
@@ -257,10 +259,7 @@ rspBART <- function(x_train,
 
     # Initialising all the stumps
     for(i in 1:n_tree){
-      forest[[i]] <- stump(x_train = x_train_scale,
-                           x_test = x_test_scale,
-                           B_train_arr = B_train_arr,
-                           B_test_arr = B_test_arr)
+      forest[[i]] <- stump(data = data)
     }
 
 
@@ -304,6 +303,12 @@ rspBART <- function(x_train,
       forest[[t]] <- updateGamma(tree = forest[[t]],
                                  curr_part_res = partial_residuals,
                                  data = data)
+
+      # Updating the betas
+      forest[[t]] <- updateBetas(tree = forest[[t]],
+                                 curr_part_res = partial_residuals,
+                                 data = data)
+
 
     }
   }
