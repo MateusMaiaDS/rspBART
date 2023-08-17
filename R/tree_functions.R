@@ -536,5 +536,72 @@ updateBetas <- function(tree,
 
 }
 
+# =================
+# Update \tau_betas
+# =================
+update_tau_betas <- function(forest,
+                             data){
 
+  # Getting the tau_b size
+  basis_size <- dim(data$B_test_arr)[3]
+  knots_size <- ncol(data$B_train_arr)
+  tau_beta_vec_aux <- numeric(basis_size)
+
+  # Same default as the paper;
+  nu <- 2
+
+  tau_b_shape <- numeric(basis_size)
+  tau_b_rate <- numeric(basis_size)
+
+  # Iterating over all basis
+  for(k in 1:basis_size){
+
+
+      # Iterating over all trees
+      for(i in 1:length(forest)){
+
+        # Getting terminal nodes
+        t_nodes_names <- get_terminals(forest[[i]])
+        n_t_nodes <- length(t_nodes_names)
+
+        # Iterating over the terminal nodes
+        for(j in 1:length(t_nodes_names)){
+
+          tau_b_shape[k] <- tau_b_shape[k] + n_t_nodes
+          tau_b_rate[k] <- tau_b_rate[k] + crossprod(forest[[i]][[t_nodes_names[j]]]$betas_vec[,j,drop = FALSE],(data$P%*%forest[[i]][[t_nodes_names[j]]]$betas_vec[,j,drop = FALSE]))
+
+        }
+
+
+      }
+
+    tau_beta_vec_aux[k] <- rgamma(n = 1,
+                                   shape = 0.5*knots_size*tau_b_shape[k] + 0.5*nu,
+                                   rate = 0.5*tau_b_rate[k] + 0.5*nu*data$delta_vec[k])
+  }
+
+  return(tau_beta_vec_aux)
+
+}
+
+# ===================
+# Updating the \delta
+# ===================
+
+update_delta <- function(data){
+
+  delta_aux <- numeric(dim(data$B_train_arr)[3])
+  nu <- 2
+  a_delta <- d_delta <- 0.001
+
+  for(i in 1:dim(data$B_train_arr)[3]){
+
+    delta_aux[i] <- stats::rgamma(n = 1,shape =  0.5*nu + a_delta,
+                               rate = 0.5*nu*data$tau_beta_vec[i]+d_delta)
+  }
+
+
+  # Returning the delta sampled vector
+  return(delta_aux)
+}
 

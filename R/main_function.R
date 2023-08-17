@@ -247,6 +247,7 @@ rspBART <- function(x_train,
                a_tau = a_tau,
                d_tau = d_tau,
                tau_beta_vec = tau_beta_vec,
+               delta_vec = rep(1,dim(B_train_arr)[3]),
                P = P)
 
   #   So to simply interepret the element all_var_splits each element correspond
@@ -308,9 +309,17 @@ rspBART <- function(x_train,
       forest[[t]] <- updateBetas(tree = forest[[t]],
                                  curr_part_res = partial_residuals,
                                  data = data)
-
-
     }
+
+    # Updating all other parameters
+    data$tau_beta_vec <- update_tau_betas(forest = forest,
+                                          data = data)
+
+    # Updating delta
+    data$delta_vec <- update_delta(forest = forest,
+                                   data = data)
+
+
   }
 
 }
