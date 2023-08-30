@@ -7,7 +7,7 @@ sim_train <- mlbench.friedman1(n = n_)  |> as.data.frame()
 x_train <- sim_train |> dplyr::select(dplyr::starts_with("x"))
 y_train <- sim_train$y
 x_test <- mlbench.friedman1(n = n_) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
-n_tree <- 10
+n_tree <- 1
 node_min_size = 5
 n_mcmc = 2000
 n_burn = 500

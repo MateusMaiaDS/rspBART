@@ -1,3 +1,7 @@
+rm(list=ls())
+source("R/debugging_rspBART.R")
+source("R/tree_functions.R")
+
 # Creating the main function from the rspBART
 rspBART <- function(x_train,
                     y_train,
@@ -148,12 +152,12 @@ rspBART <- function(x_train,
   # Scaling "y"
   if(scale_bool){
     y_scale <- normalize_bart(y = y_train,a = min_y,b = max_y)
-    tau_mu <- (4*n_tree*(kappa^2))
+    tau_gamma <- tau_mu <- (4*n_tree*(kappa^2))
 
   } else {
     y_scale <- y_train
 
-    tau_mu <- (4*n_tree*(kappa^2))/((max_y-min_y)^2)
+    tau_gamma <- tau_mu <- (4*n_tree*(kappa^2))/((max_y-min_y)^2)
   }
 
   # Getting the naive sigma value
@@ -180,17 +184,19 @@ rspBART <- function(x_train,
   # =====================================================================
   # ========= From here I gonna initialise the BART function itself =====
   # =====================================================================
-
   n_post <- (n_mcmc-n_burn)
   all_trees <- vector("list", n_mcmc)
   all_betas <- vector("list",n_mcmc)
-  tau_beta_vec <- rep(1,n_tree)
+  tau_beta_vec <- rep(1,ncol(x_train_scale))
   all_tau_beta <- matrix(NA,nrow = n_mcmc,ncol = n_tree)
   all_tau <- numeric(n_mcmc)
   trees_fit <- matrix(0,nrow = n_tree,ncol = nrow(x_train_scale))
   all_trees_fit <- vector("list",n_mcmc)
   all_trees <- vector("list",n_mcmc)
   forest <- vector("list",n_tree)
+
+  # Partial component pieces
+  partial_train_fits <- vector("list", n_mcmc)
 
   proposal_outcomes <- setNames(data.frame(matrix(nrow = 0, ncol =6)),
                                 c("tree_number" , "proposal", "status","mcmc_iter", "new_tree_loglike", "old_tree_loglike"))
@@ -237,6 +243,7 @@ rspBART <- function(x_train,
   #most of the functions
   data <- list(x_train = x_train_scale,
                x_test = x_test_scale,
+               y_train = y_scale,
                B_train_arr = B_train_arr,
                B_test_arr = B_test_arr,
                all_var_splits = all_var_splits,
@@ -257,26 +264,32 @@ rspBART <- function(x_train,
   # Initialsing the loop
   for(i in 1:n_mcmc){
 
+    # Initialising the partial train tree fits
+    partial_train_fits[[i]] <- vector("list",data$n_tree)
+    names(partial_train_fits[[i]]) <- paste0("tree",1:data$n_tree)
+
+    # Initialising orogress bar
+    progress <- i / n_mcmc * 100
 
     # Initialising all the stumps
-    for(i in 1:n_tree){
-      forest[[i]] <- stump(data = data)
+    for(k in 1:data$n_tree){
+      forest[[k]] <- stump(data = data)
     }
 
 
-    for(t in 1:n_tree){
+    for(t in 1:data$n_tree){
 
 
         # Calculating the partial residuals
         if(n_tree>1){
-          partial_residuals <- y_scale-colSums(trees_fit[-j,,drop = FALSE])
+          partial_residuals <- y_scale-colSums(trees_fit[-t,,drop = FALSE])
         } else {
           partial_residuals <- y_scale
         }
 
 
       # Sample a verb
-      verb <- sample(c("grow","prune", "change"), prob = c(0.3,0.3,0.4))
+      verb <- sample(c("grow","prune", "change"), prob = c(0.3,0.3,0.4),size = 1)
 
       # Forcing to grow when only have a stump
       if(length(forest[[t]])==1){
@@ -299,6 +312,8 @@ rspBART <- function(x_train,
                               data = data)
       }
 
+      # cat("Forest size:", (length(forest)),"\n")
+      # cat("Forest verb:", verb,"\n")
 
       # Updating the intercept
       forest[[t]] <- updateGamma(tree = forest[[t]],
@@ -309,18 +324,44 @@ rspBART <- function(x_train,
       forest[[t]] <- updateBetas(tree = forest[[t]],
                                  curr_part_res = partial_residuals,
                                  data = data)
+
+      # Getting the predictions
+      tree_predictions <- getPredictions(tree = forest[[t]],
+                                         data = data)
+
+      trees_fit[t,] <- rowSums(tree_predictions$y_train_hat)
+
+      partial_train_fits[[t]] <- tree_predictions$y_train_hat
+
+
     }
 
     # Updating all other parameters
-    data$tau_beta_vec <- update_tau_betas(forest = forest,
-                                          data = data)
+    # data$tau_beta_vec <- update_tau_betas(forest = forest,data = data)
 
     # Updating delta
-    data$delta_vec <- update_delta(forest = forest,
-                                   data = data)
+    # data$delta_vec <- update_delta(data = data)
+
+    # Getting tau
+    data$tau <- update_tau(y_train_hat = colSums(trees_fit),
+                           data = data)
+
+
+    # Print progress bar
+    cat("\rProgress: [", paste(rep("=", floor(progress / 5)), collapse = ""),
+        paste(rep(" ", floor((100 - progress) / 5)), collapse = ""),
+        "] ", sprintf("%.1f%%", progress))
+
+    # Flush the output
+    flush.console()
+
+    # Simulate some work
+    Sys.sleep(0.1)
 
 
   }
+
+  plot(x_train_scale[,1],tree_predictions$y_train_hat[,1])
 
 }
 
