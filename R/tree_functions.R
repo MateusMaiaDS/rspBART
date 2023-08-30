@@ -110,7 +110,7 @@ grow <- function(tree,
   while(valid_terminal_node){
       # Convinience while to avoid terminal nodes of 2
       # Sample a split var
-      p_var <- sample(1:ncol(data$B_train_arr),size = 1)
+      p_var <- sample(1:ncol(data$x_train),size = 1)
 
       # Selecting an available cutpoint from this terminal node
       valid_range_grow <- range(x_train[g_node$train_index,p_var])
@@ -346,7 +346,7 @@ change <- function(tree,
   while(valid_terminal_node){
     # Convinience while to avoid terminal nodes of 2
     # Sample a split var
-    p_var <- sample(1:ncol(data$B_train_arr),size = 1)
+    p_var <- sample(1:ncol(data$x_train),size = 1)
 
     # Selecting an available cutpoint from this terminal node
     valid_range_grow <- range(x_train[c_node$train_index,p_var])

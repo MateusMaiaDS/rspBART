@@ -1,12 +1,26 @@
 # Just running the default values so I can go through the function and debug all
 #the things
 
+mlbench.friedman1.nointercation <- function (n, sd = 1)
+{
+  x <- matrix(runif(4 * n), ncol = 4)
+  y <- 10 * sin(pi * x[, 1])
+  y <- y + 20 * (x[, 2] - 0.5)^2 + 10 * x[, 3] + 5 * x[, 4]
+  if (sd > 0) {
+    y <- y + rnorm(n, sd = sd)
+  }
+  list(x = x, y = y)
+}
+
 library(mlbench)
 n_ <- 101
-sim_train <- mlbench.friedman1(n = n_)  |> as.data.frame()
+sim_train <- mlbench.friedman1.nointercation(n = n_)  |> as.data.frame()
 x_train <- sim_train |> dplyr::select(dplyr::starts_with("x"))
 y_train <- sim_train$y
-x_test <- mlbench.friedman1(n = n_) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
+x_test <- mlbench.friedman1.nointercation(n = n_) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
+
+# x_train <- x_train[,1:5]
+# x_test <- x_test[,1:5]
 n_tree <- 1
 node_min_size = 5
 n_mcmc = 2000

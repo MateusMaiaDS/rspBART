@@ -188,15 +188,16 @@ rspBART <- function(x_train,
   all_trees <- vector("list", n_mcmc)
   all_betas <- vector("list",n_mcmc)
   tau_beta_vec <- rep(1,ncol(x_train_scale))
-  all_tau_beta <- matrix(NA,nrow = n_mcmc,ncol = n_tree)
+  all_tau_beta <- matrix(NA,nrow = n_mcmc,ncol = ncol(x_train_scale))
   all_tau <- numeric(n_mcmc)
+  all_y_hat <- matrix(NA,nrow = n_mcmc,ncol = nrow(x_train_scale))
   trees_fit <- matrix(0,nrow = n_tree,ncol = nrow(x_train_scale))
   all_trees_fit <- vector("list",n_mcmc)
   all_trees <- vector("list",n_mcmc)
   forest <- vector("list",n_tree)
 
   # Partial component pieces
-  partial_train_fits <- vector("list", n_mcmc)
+  partial_train_fits <- vector("list", n_tree)
 
   proposal_outcomes <- setNames(data.frame(matrix(nrow = 0, ncol =6)),
                                 c("tree_number" , "proposal", "status","mcmc_iter", "new_tree_loglike", "old_tree_loglike"))
@@ -261,6 +262,8 @@ rspBART <- function(x_train,
   #to each variable. Afterwards each element corresponds to a cutpoint; Finally,
   #inside that level we would have the index for the the left and right nodes;
 
+  # Initialing for storing post samples
+  post <- 0
   # Initialsing the loop
   for(i in 1:n_mcmc){
 
@@ -336,15 +339,29 @@ rspBART <- function(x_train,
 
     }
 
+
+    # Getting final predcition
+    y_hat <- colSums(trees_fit)
+
     # Updating all other parameters
-    # data$tau_beta_vec <- update_tau_betas(forest = forest,data = data)
+    data$tau_beta_vec <- update_tau_betas(forest = forest,data = data)
 
     # Updating delta
-    # data$delta_vec <- update_delta(data = data)
+    data$delta_vec <- update_delta(data = data)
 
     # Getting tau
-    data$tau <- update_tau(y_train_hat = colSums(trees_fit),
+    data$tau <- update_tau(y_train_hat = y_hat,
                            data = data)
+
+
+
+    # Storing all predictions
+    all_trees[[i]] <- forest
+    all_tau[[i]] <- data$tau
+    all_trees_fit[[i]] <- partial_train_fits
+    all_y_hat[i,] <- y_hat
+    all_tau_beta[i,] <- data$tau_beta_vec
+
 
 
     # Print progress bar
@@ -361,7 +378,14 @@ rspBART <- function(x_train,
 
   }
 
-  plot(x_train_scale[,1],tree_predictions$y_train_hat[,1])
+  plot(all_tau,type = "l")
+  y1_hat <- matrix(0,nrow = n_post,ncol = nrow(data$x_train))
+  for(i in 1:nrow(y1_hat)){
+    for(t in 1:n_tree){
+      y1_hat[i,] <- all_trees_fit[[i]][[t]][,4]
+    }
+  }
+  plot(x_train_scale[,4],colMeans(y1_hat))
 
 }
 
