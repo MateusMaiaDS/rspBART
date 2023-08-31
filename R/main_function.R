@@ -92,6 +92,7 @@ rspBART <- function(x_train,
   # =========================================================================================================
   # Getting the Splines Basis functions
   # =========================================================================================================
+
   knots <- apply(x_train_scale,
                  2,
                  function(x){seq(min(x),max(x),length.out = nIknots)})
@@ -189,9 +190,10 @@ rspBART <- function(x_train,
   all_betas <- vector("list",n_mcmc)
   tau_beta_vec <- rep(1,ncol(x_train_scale))
   all_tau_beta <- matrix(NA,nrow = n_mcmc,ncol = ncol(x_train_scale))
+  all_delta <- matrix(NA,nrow = n_mcmc,ncol = ncol(x_train_scale))
+
   all_tau <- numeric(n_mcmc)
   all_y_hat <- matrix(NA,nrow = n_mcmc,ncol = nrow(x_train_scale))
-  trees_fit <- matrix(0,nrow = n_tree,ncol = nrow(x_train_scale))
   all_trees_fit <- vector("list",n_mcmc)
   all_trees <- vector("list",n_mcmc)
   forest <- vector("list",n_tree)
@@ -199,7 +201,7 @@ rspBART <- function(x_train,
   # Partial component pieces
   partial_train_fits <- vector("list", n_tree)
 
-  proposal_outcomes <- setNames(data.frame(matrix(nrow = 0, ncol =6)),
+  proposal_outcomes <- setNames(data.frame(matrix(nrow = 0, ncol = 6)),
                                 c("tree_number" , "proposal", "status","mcmc_iter", "new_tree_loglike", "old_tree_loglike"))
   all_train_indexes <- data.frame(matrix(data = NA,nrow = nrow(xcut_m),ncol = ncol(xcut_m)))
 
@@ -264,6 +266,19 @@ rspBART <- function(x_train,
 
   # Initialing for storing post samples
   post <- 0
+
+  # Initialising all the stumps
+  for(k in 1:data$n_tree){
+    forest[[k]] <- stump(data = data)
+  }
+
+  # and tree predictions
+  trees_fit <- matrix(0,nrow = n_tree,ncol = nrow(x_train_scale))
+
+  for(i in 1:n_tree){
+    trees_fit[i,] <- y_scale/n_tree
+  }
+
   # Initialsing the loop
   for(i in 1:n_mcmc){
 
@@ -274,14 +289,7 @@ rspBART <- function(x_train,
     # Initialising orogress bar
     progress <- i / n_mcmc * 100
 
-    # Initialising all the stumps
-    for(k in 1:data$n_tree){
-      forest[[k]] <- stump(data = data)
-    }
-
-
     for(t in 1:data$n_tree){
-
 
         # Calculating the partial residuals
         if(n_tree>1){
@@ -340,14 +348,21 @@ rspBART <- function(x_train,
     }
 
 
+    plot(x_train_scale,y_scale)
+    for(plot_i in 1:n_tree){
+      points(x_train_scale,trees_fit[plot_i,],pch=20,col = alpha(plot_i,0.2))
+    }
+
     # Getting final predcition
     y_hat <- colSums(trees_fit)
+
+    points(x_train_scale,y_hat,col = "blue")
 
     # Updating all other parameters
     data$tau_beta_vec <- update_tau_betas(forest = forest,data = data)
 
     # Updating delta
-    data$delta_vec <- update_delta(data = data)
+    # data$delta_vec <- update_delta(data = data)
 
     # Getting tau
     data$tau <- update_tau(y_train_hat = y_hat,
@@ -361,7 +376,7 @@ rspBART <- function(x_train,
     all_trees_fit[[i]] <- partial_train_fits
     all_y_hat[i,] <- y_hat
     all_tau_beta[i,] <- data$tau_beta_vec
-
+    all_delta[i,] <- data$delta_vec
 
 
     # Print progress bar
@@ -375,17 +390,40 @@ rspBART <- function(x_train,
     # Simulate some work
     Sys.sleep(0.1)
 
-
   }
 
+  # ====== Few analyses from the results ======
   plot(all_tau,type = "l")
   y1_hat <- matrix(0,nrow = n_post,ncol = nrow(data$x_train))
+
   for(i in 1:nrow(y1_hat)){
     for(t in 1:n_tree){
-      y1_hat[i,] <- all_trees_fit[[i]][[t]][,4]
+      y1_hat[i,] <- all_trees_fit[[i]][[t]][,1]
     }
   }
-  plot(x_train_scale[,4],colMeans(y1_hat))
+
+  plot(x_train_scale[,1],colMeans(y1_hat))
+  plot(all_tau_beta, type = "l")
+  plot(all_delta, type = "l")
+  plot(x_train_scale,y_scale)
+  points(x_train_scale,colMeans(all_y_hat),pch= 20, col = "blue")
+  # ============================================
+
+  curr <- 0
+  tree_lengths <- numeric()
+
+  for(i in 1:length(all_trees)){
+
+      curr <- curr + 1
+
+      for(j in 1:n_tree){
+          tree_lengths[curr] <- length(all_trees[[i]][[j]])
+      }
+
+  }
+
+  tree_lengths |> table()
+
 
 }
 

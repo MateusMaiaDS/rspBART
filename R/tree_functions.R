@@ -113,10 +113,23 @@ grow <- function(tree,
       p_var <- sample(1:ncol(data$x_train),size = 1)
 
       # Selecting an available cutpoint from this terminal node
-      valid_range_grow <- range(x_train[g_node$train_index,p_var])
+      valid_range_grow <- range(data$x_train[g_node$train_index,p_var])
+
+      # Case of invalid range
+      if(length(valid_range_grow)==0){
+        return(tree)
+      }
+
+      # Subsetting the indexes of
+      valid_cutpoint <- which(xcut_m[,p_var]>valid_range_grow[1] & xcut_m[,p_var]<valid_range_grow[2])
+
+      # When there's no valid cutpoint on the sampled terminal node
+      if(length(valid_cutpoint)==0){
+        return(tree)
+      }
 
       # Getting which cutpoints are valid and sample onde index
-      sample_cutpoint <- sample(which(xcut_m[,p_var]>valid_range_grow[1] & xcut_m[,p_var]<valid_range_grow[2]),
+      sample_cutpoint <- sample(valid_cutpoint,
              size = 1)
 
       # Getting the left & right index
@@ -275,23 +288,18 @@ prune <- function(tree,
   # Calculating loglikelihood for the grown node, the left and the right node
 
   p_loglike <- nodeLogLike(curr_part_res = curr_part_res,
-                           B_train_arr = data$B_train_arr,
                            index_node = p_node$train_index,
-                           tau_beta_vec = data$tau_beta_vec,
-                           P = data$P)
+                           data = data
+                           )
 
 
   p_left_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
-                               B_train_arr = data$B_train_arr,
                                index_node = children_left_index,
-                               tau_beta_vec = data$tau_beta_vec,
-                               P = data$P)
+                               data = data)
 
   p_right_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
-                                B_train_arr = data$B_train_arr,
                                 index_node = children_right_index,
-                                tau_beta_vec = data$tau_beta_vec,
-                                P = data$P)
+                                data = data)
 
   # Calculating the prior
   prior_loglike <- log(1-alpha*(1+p_node$depth_node)^(-beta)) - # Prior of the new terminal node
@@ -333,9 +341,9 @@ change <- function(tree,
                  data){
 
   # Sampling a terminal node
-  nog_nodes <- get_nogs(tree)
-  n_nog_nodes <- length(nog_nodes)
-  c_node_name <- sample(nog_nodes,size = 1)
+  noc_nodes <- get_nogs(tree)
+  n_noc_nodes <- length(noc_nodes)
+  c_node_name <- sample(noc_nodes,size = 1)
   c_node <- tree[[c_node_name]]
 
 
@@ -349,27 +357,35 @@ change <- function(tree,
     p_var <- sample(1:ncol(data$x_train),size = 1)
 
     # Selecting an available cutpoint from this terminal node
-    valid_range_grow <- range(x_train[c_node$train_index,p_var])
+    valid_range_grow <- range(data$x_train[c_node$train_index,p_var])
+
+    # Subsetting the indexes of
+    valid_cutpoint <- which(xcut_m[,p_var]>valid_range_grow[1] & xcut_m[,p_var]<valid_range_grow[2])
+
+    # When there's no valid cutpoint on the sampled terminal node
+    if(length(valid_cutpoint)==0){
+      return(tree)
+    }
 
     # Getting which cutpoints are valid and sample onde index
-    sample_cutpoint <- sample(which(xcut_m[,p_var]>valid_range_grow[1] & xcut_m[,p_var]<valid_range_grow[2]),
+    sample_cutpoint <- sample(valid_cutpoint,
                               size = 1)
 
     # Getting the left & right index
-    left_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_train[all_var_splits[[p_var]][[sample_cutpoint]]$left_train %in% g_node$train_index]
-    right_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_train[all_var_splits[[p_var]][[sample_cutpoint]]$right_train %in% g_node$train_index]
+    left_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_train[all_var_splits[[p_var]][[sample_cutpoint]]$left_train %in% c_node$train_index]
+    right_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_train[all_var_splits[[p_var]][[sample_cutpoint]]$right_train %in% c_node$train_index]
 
-    left_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_test[all_var_splits[[p_var]][[sample_cutpoint]]$left_test %in% g_node$test_index]
-    right_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_test[all_var_splits[[p_var]][[sample_cutpoint]]$right_test %in% g_node$test_index]
+    left_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$left_test[all_var_splits[[p_var]][[sample_cutpoint]]$left_test %in% c_node$test_index]
+    right_test_index  <- all_var_splits[[p_var]][[sample_cutpoint]]$right_test[all_var_splits[[p_var]][[sample_cutpoint]]$right_test %in% c_node$test_index]
 
 
 
     # Verifying that the correct number was used
-    if((length(left_index)+length(right_index))!=length(g_node$train_index)){
+    if((length(left_index)+length(right_index))!=length(c_node$train_index)){
       stop("Something went wrong here --- train grown index doest match")
     }
 
-    if((length(left_test_index)+length(right_test_index))!=length(g_node$test_index)){
+    if((length(left_test_index)+length(right_test_index))!=length(c_node$test_index)){
       stop("Something went wrong here --- test grown index doest match")
     }
 
@@ -397,29 +413,21 @@ change <- function(tree,
   # Calculating loglikelihood for the new changed nodes and the old ones
 
   c_loglike_left <- nodeLogLike(curr_part_res = curr_part_res,
-                           B_train_arr = data$B_train_arr,
                            index_node = tree[[c_node$left]]$train_index,
-                           tau_beta_vec = data$tau_beta_vec,
-                           P = data$P)
+                           data = data)
 
 
   c_loglike_right <-  nodeLogLike(curr_part_res = curr_part_res,
-                               B_train_arr = data$B_train_arr,
                                index_node = tree[[c_node$right]]$train_index,
-                               tau_beta_vec = data$tau_beta_vec,
-                               P = data$P)
+                               data = data)
 
   new_c_loglike_left <-  nodeLogLike(curr_part_res = curr_part_res,
-                                B_train_arr = data$B_train_arr,
                                 index_node = left_index,
-                                tau_beta_vec = data$tau_beta_vec,
-                                P = data$P)
+                                data = data)
 
   new_c_loglike_right <-  nodeLogLike(curr_part_res = curr_part_res,
-                                     B_train_arr = data$B_train_arr,
                                      index_node = right_index,
-                                     tau_beta_vec = data$tau_beta_vec,
-                                     P = data$P)
+                                     data = data)
 
 
   # Calculating the acceptance probability
@@ -509,7 +517,7 @@ updateBetas <- function(tree,
   basis_dim <- dim(data$B_train_arr)[3]
   knots_dim <- ncol(data$B_train_arr)
 
-
+  # cat(paste0("Basis dim value: ", basis_dim ,"\n"))
   # Creating each element for each basis
   basis_sum_list <- vector("list",basis_dim)
 
@@ -520,17 +528,22 @@ updateBetas <- function(tree,
 
     for(j in 1:basis_dim){
 
-      Gamma_beta_tau_chol <-  chol(crossprod(data$B_train_arr[cu_t$train,,j])+(data$tau_beta_vec[j]/data$tau)*data$P)
+      Gamma_beta_tau_chol <-  chol(crossprod(data$B_train_arr[cu_t$train_index,,j])+(data$tau_beta_vec[j]/data$tau)*data$P)
       Gamma_beta_inv <- chol2inv(Gamma_beta_tau_chol)
 
       sum_aux <- matrix(0,nrow = length(cu_t$train_index),ncol = 1)
+
       # Sum j exception
       for(k in (1:basis_dim)[-j]){
+
+          # cat(paste0("RUNNING INTO THE BASIS DIM : ", basis_dim ,"\n"))
+
           sum_aux <- sum_aux + (data$B_train_arr[cu_t$train_index,,k]%*%cu_t$betas_vec[,k,drop = FALSE])
       }
 
+
       # Calculating the mean to be sampled
-      beta_mean <- Gamma_beta_inv%*%(crossprod(data$B_train_arr[cu_t$train_index,,j],curr_part_res[cu_t$train_index])-crossprod(data$B_train_arr[cu_t$train_index,,j],(cu_t$gamma+sum_aux)))
+      beta_mean <- Gamma_beta_inv%*%(crossprod(data$B_train_arr[cu_t$train_index,,j],(curr_part_res[cu_t$train_index]-(cu_t$gamma+sum_aux))))
 
       # Check this line again if there's any bug on the cholesky decomposition
       tree[[t_nodes_names[i]]]$betas_vec[,j] <- mvnfast::rmvn(n = 1,mu = beta_mean,
@@ -578,7 +591,7 @@ update_tau_betas <- function(forest,
 
         # Iterating over the terminal nodes
         for(j in 1:length(t_nodes_names)){
-          tau_b_rate[k] <- tau_b_rate[k] + crossprod(forest[[i]][[t_nodes_names[j]]]$betas_vec[,j,drop = FALSE],(data$P%*%forest[[i]][[t_nodes_names[j]]]$betas_vec[,j,drop = FALSE]))
+          tau_b_rate[k] <- tau_b_rate[k] + crossprod(forest[[i]][[t_nodes_names[j]]]$betas_vec[,k,drop = FALSE],(data$P%*%forest[[i]][[t_nodes_names[j]]]$betas_vec[,k,drop = FALSE]))
 
         }
 
@@ -587,7 +600,9 @@ update_tau_betas <- function(forest,
 
     tau_beta_vec_aux[k] <- rgamma(n = 1,
                                    shape = 0.5*knots_size*tau_b_shape[k] + 0.5*nu,
-                                   rate = 0.5*tau_b_rate[k] + 0.5*nu*data$delta_vec[k])
+                                  rate = 0.5*tau_b_rate[k] + data$n_tree)
+
+                                   # rate = 0.5*tau_b_rate[k] + 0.5*nu*data$delta_vec[k])
   }
 
   return(tau_beta_vec_aux)
